@@ -8,21 +8,25 @@ class Player {
 private:
     int x, y;  // Position du joueur
     int speed; // Vitesse de déplacement
-    DFRobot_RGBMatrix* matrix; // Pointeur vers la matrice LED
+    DFRobot_RGBMatrix* matrix;
+    uint32_t pixelColors[64][64];
 
 public:
     // Constructeur qui prend un pointeur vers la matrice
-    Player(DFRobot_RGBMatrix* display, int startX, int startY);
+    Player(DFRobot_RGBMatrix* matrix, int startX, int startY);
 
     // Getters
     int getX();
     int getY();
 
     // Déplacements
-    void moveUp();
-    void moveDown();
-    void moveLeft();
-    void moveRight();
+    void moveUp(short tabColor[64][64] );
+    void moveDown(short tabColor[64][64] );
+    void moveLeft(short tabColor[64][64] );
+    void moveRight(short tabColor[64][64] );
+
+    // Collisions
+    bool checkWallCollision(int x, int y,short tabColor[64][64]);
 
     // Autres actions
     void placeBomb();
