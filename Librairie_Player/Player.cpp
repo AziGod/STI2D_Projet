@@ -53,7 +53,7 @@ void Player::moveRight() {
 bool Player::checkWallCollision(int x, int y){
     for (int i = 0; i < 4; i++) { // Première boucle (lignes)
         for (int j = 0; j < 4; j++) { // Deuxième boucle (colonnes)
-            if (pixelColors[x][y] == matrix->Color333(3, 3, 0)){
+            if (pixelColors[x][y] == true){
                 return true;
             } 
         }
