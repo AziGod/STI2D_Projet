@@ -36,22 +36,31 @@ DFRobot_RGBMatrix matrix(A, B, C, D, E, CLK, LAT, OE, false, WIDTH, _HIGH);
 
 
 
-//Structure coordonnées
+//Structure coordonnées pour les bombes
 struct Coord {
   int x;
   int y;
+  long timePosed;
 };
 //Tableau des coordonnées des bombes posées
 Coord coordBombe[6];
 int coordCount = 0; 
 
+// Permet de compter le temps écoulé
+unsigned long lastAddTime = 0; 
+
 //Fonction pour ajouter une bombe au tableau
 void addCoord(int x, int y) {
-  if (coordCount < 6) {
-    coordBombe[coordCount] = Coord {x, y};
-    coordCount++;
-  } else {
-    Serial.println("Liste pleine !");
+  unsigned long currentTime = millis();
+  
+  if (currentTime - lastAddTime >= 200) {
+    if (coordCount < 6) {
+      coordBombe[coordCount] = Coord {x, y};
+      coordCount++;
+      lastAddTime = currentTime;
+    } else {
+      Serial.println("Liste pleine !");
+    }
   }
 }
 
@@ -167,15 +176,13 @@ void loop() {
   Y = analogRead (axeY);
 
   /*Serial.print("axeX : ");
-  Serial.println(X);
   Serial.print("axeY : ");
-  Serial.println(Y);*/
-  for(int i; i < coordCount; i++){
+    */
+  for(int i=0; i < coordCount; i++){
     dessinerBombe(coordBombe[i].x, coordBombe[i].y);
   }
 
   if(X == 1023){
-    Serial.println("bombe !");
     addCoord(posX, posY);
   }
 
