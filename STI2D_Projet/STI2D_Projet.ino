@@ -37,14 +37,16 @@ DFRobot_RGBMatrix matrix(A, B, C, D, E, CLK, LAT, OE, false, WIDTH, _HIGH);
 
 
 //Structure coordonnées pour les bombes
-struct Coord {
+struct Bombe {
   int x;
   int y;
-  long timePosed;
+  unsigned long timePosed;
+  bool active;
 };
+
 //Tableau des coordonnées des bombes posées
-Coord coordBombe[6];
-int coordCount = 0; 
+Bombe bombes[6];
+int bombeCount = 0;
 
 // Permet de compter le temps écoulé
 unsigned long lastAddTime = 0; 
@@ -54,15 +56,16 @@ void addCoord(int x, int y) {
   unsigned long currentTime = millis();
   
   if (currentTime - lastAddTime >= 200) {
-    if (coordCount < 6) {
-      coordBombe[coordCount] = Coord {x, y};
-      coordCount++;
+    if (bombeCount < 6) {
+      bombes[bombeCount] = {x, y, currentTime, true}; // Nouvelle bombe active
+      bombeCount++;
       lastAddTime = currentTime;
     } else {
-      Serial.println("Liste pleine !");
+      Serial.println("Liste de bombes pleine !");
     }
   }
 }
+
 
 
 // tableau pour stocker la couleur des pixels de la matrix
@@ -127,6 +130,49 @@ void dessinerBombe(int posX, int posY) {
     matrix.drawLine(posX, posY+1, posX+2, posY+1, matrix.Color333(7, 0, 0));
 }
 
+void dessinerExplosion(int posX, int posY) {
+  //Explosion du haut
+  matrix.drawLine(posX, posY, posX, 6, matrix.Color333(7, 0, 0));
+  matrix.drawLine(posX+1, posY, posX+1, 6, matrix.Color333(7, 0, 0));
+  matrix.drawLine(posX+2, posY, posX+2, 6, matrix.Color333(7, 0, 0));
+
+  //Explosion de droite
+  matrix.drawLine(posX+3, posY, 57, posY, matrix.Color333(7, 0, 0));
+  matrix.drawLine(posX+3, posY+1, 57, posY+1, matrix.Color333(7, 0, 0));
+  matrix.drawLine(posX+3, posY+2, 57, posY+2, matrix.Color333(7, 0, 0));
+
+  //Explosion du bas
+  matrix.drawLine(posX, posY-2, posX, 57, matrix.Color333(7, 0, 0));
+  matrix.drawLine(posX+1, posY-2, posX+1, 57, matrix.Color333(7, 0, 0));
+  matrix.drawLine(posX+2, posY-2, posX+2, 57, matrix.Color333(7, 0, 0));
+
+  //Explosion de gauche
+  matrix.drawLine(posX, posY, 6, posY, matrix.Color333(7, 0, 0));
+  matrix.drawLine(posX, posY+1, 6, posY+1, matrix.Color333(7, 0, 0));
+  matrix.drawLine(posX, posY+2, 6, posY+2, matrix.Color333(7, 0, 0));
+}
+
+
+unsigned long bombTimes[6]; // Stocke les temps de pose
+bool bombActive[6]; // Indique si une bombe est active
+
+void verifierBombes() {
+    unsigned long currentTime = millis();
+    for (int i = 0; i < bombeCount; i++) {
+        if (bombes[i].active && currentTime - bombes[i].timePosed >= 3000) {
+            bombes[i].active = false; // Désactiver la bombe
+            explosion(bombes[i].x, bombes[i].y);
+        }
+    }
+}
+
+
+void explosion(int x, int y) {
+    dessinerExplosion(x, y);
+}
+
+
+
 
 void setup() {
   pinMode (axeX, INPUT); // définition de A6 comme une entrée
@@ -178,9 +224,13 @@ void loop() {
   /*Serial.print("axeX : ");
   Serial.print("axeY : ");
     */
-  for(int i=0; i < coordCount; i++){
-    dessinerBombe(coordBombe[i].x, coordBombe[i].y);
+  for(int i=0; i < bombeCount; i++){
+      if (bombes[i].active) {
+          dessinerBombe(bombes[i].x, bombes[i].y);
+      }
   }
+  verifierBombes();
+
 
   if(X == 1023){
     addCoord(posX, posY);
