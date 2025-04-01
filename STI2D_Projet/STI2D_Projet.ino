@@ -32,6 +32,8 @@ int speed = 1;
 
 int tailleJoueur = 3;
 
+
+
 DFRobot_RGBMatrix matrix(A, B, C, D, E, CLK, LAT, OE, false, WIDTH, _HIGH);
 
 
@@ -42,6 +44,7 @@ struct Bombe {
   int y;
   unsigned long timePosed;
   bool active;
+  int explosionHits[12];
 };
 
 //Tableau des coordonnées des bombes posées
@@ -77,7 +80,7 @@ bool checkWallCollision(int x, int y){
   }
  
   
-  for (int i = 0; i < 3; i++) { // Première boucle (lignes)
+  for (int i = 0; i < tailleJoueur; i++) { // Première boucle (lignes)
       for (int j = 0; j < tailleJoueur; j++) { // Deuxième boucle (colonnes)
           int caseX = ((x-6)+i)/4 ;
           int caseY = ((y-6)+j)/4;
@@ -91,6 +94,57 @@ bool checkWallCollision(int x, int y){
       }
   }
   return false;
+}
+
+/*
+* Remplit le tableau explosionHits
+*/
+Bombe fillExplosionHits(Bombe b){
+  //haut 
+  for(int i = 0; i < 3; i++){
+    int coordY = b.y;
+    while(! checkBlockGetExplosion(b.x+i, coordY) && coordY > 5){
+      coordY--;
+    }
+    b.explosionHits[i] = coordY +1;
+  }
+  //droite
+  for(int i = 0; i < 3; i++){
+    int coordX = b.x;
+    while(! checkBlockGetExplosion(coordX, b.y +i) && coordX < 58){
+      coordX++;
+    }
+    b.explosionHits[i+3] = coordX -1;
+  }
+  //bas 
+  for(int i = 0; i < 3; i++){
+    int coordY = b.y;
+    while(! checkBlockGetExplosion(b.x+i, coordY) && coordY < 58){
+      coordY++;
+    }
+    b.explosionHits[i+6] = coordY -1;
+  }
+  //gauche
+  for(int i = 0; i < 3; i++){
+    int coordX = b.x;
+    while(! checkBlockGetExplosion(coordX, b.y +i) && coordX > 5){
+      coordX--;
+    }
+    b.explosionHits[i+9] = coordX +1;
+  }
+  return b;
+}
+
+/*
+* Regarde si un bloc est touché par l'explosion
+*/
+bool checkBlockGetExplosion(int x, int y){
+    int caseX = (x-6)/4;
+    int caseY = (y-6)/4;
+    if (caseColors[caseX][caseY]){
+      return true;
+    } 
+    return false;
 }
 
 void moveUp() { 
@@ -130,26 +184,52 @@ void dessinerBombe(int posX, int posY) {
     matrix.drawLine(posX, posY+1, posX+2, posY+1, matrix.Color333(7, 0, 0));
 }
 
-void dessinerExplosion(int posX, int posY) {
+void dessinerExplosion(Bombe b) {
+  int posX = b.x;
+  int posY = b.y;
   //Explosion du haut
-  matrix.drawLine(posX, posY, posX, 6, matrix.Color333(7, 0, 0));
-  matrix.drawLine(posX+1, posY, posX+1, 6, matrix.Color333(7, 0, 0));
-  matrix.drawLine(posX+2, posY, posX+2, 6, matrix.Color333(7, 0, 0));
+  matrix.drawLine(posX, posY, posX, b.explosionHits[0], matrix.Color333(7, 0, 0));
+  matrix.drawLine(posX+1, posY, posX+1, b.explosionHits[1], matrix.Color333(7, 0, 0));
+  matrix.drawLine(posX+2, posY, posX+2, b.explosionHits[2], matrix.Color333(7, 0, 0));
 
   //Explosion de droite
-  matrix.drawLine(posX+3, posY, 57, posY, matrix.Color333(7, 0, 0));
-  matrix.drawLine(posX+3, posY+1, 57, posY+1, matrix.Color333(7, 0, 0));
-  matrix.drawLine(posX+3, posY+2, 57, posY+2, matrix.Color333(7, 0, 0));
+  matrix.drawLine(posX+2, posY, b.explosionHits[3], posY, matrix.Color333(7, 0, 0));
+  matrix.drawLine(posX+2, posY+1, b.explosionHits[4], posY+1, matrix.Color333(7, 0, 0));
+  matrix.drawLine(posX+2, posY+2, b.explosionHits[5], posY+2, matrix.Color333(7, 0, 0));
 
   //Explosion du bas
-  matrix.drawLine(posX, posY-2, posX, 57, matrix.Color333(7, 0, 0));
-  matrix.drawLine(posX+1, posY-2, posX+1, 57, matrix.Color333(7, 0, 0));
-  matrix.drawLine(posX+2, posY-2, posX+2, 57, matrix.Color333(7, 0, 0));
+  matrix.drawLine(posX, posY, posX, b.explosionHits[6], matrix.Color333(7, 0, 0));
+  matrix.drawLine(posX+1, posY, posX+1, b.explosionHits[7], matrix.Color333(7, 0, 0));
+  matrix.drawLine(posX+2, posY, posX+2, b.explosionHits[8], matrix.Color333(7, 0, 0));
 
   //Explosion de gauche
-  matrix.drawLine(posX, posY, 6, posY, matrix.Color333(7, 0, 0));
-  matrix.drawLine(posX, posY+1, 6, posY+1, matrix.Color333(7, 0, 0));
-  matrix.drawLine(posX, posY+2, 6, posY+2, matrix.Color333(7, 0, 0));
+  matrix.drawLine(posX, posY, b.explosionHits[9], posY, matrix.Color333(7, 0, 0));
+  matrix.drawLine(posX, posY+1, b.explosionHits[10], posY+1, matrix.Color333(7, 0, 0));
+  matrix.drawLine(posX, posY+2, b.explosionHits[11], posY+2, matrix.Color333(7, 0, 0));
+}
+
+void effacerExplosion(Bombe b) {
+  int posX = b.x;
+  int posY = b.y;
+  //Explosion du haut
+  matrix.drawLine(posX, posY, posX, b.explosionHits[0], matrix.Color333(0, 0, 0));
+  matrix.drawLine(posX+1, posY, posX+1, b.explosionHits[1], matrix.Color333(0, 0, 0));
+  matrix.drawLine(posX+2, posY, posX+2, b.explosionHits[2], matrix.Color333(0, 0, 0));
+
+  //Explosion de droite
+  matrix.drawLine(posX+2, posY, b.explosionHits[3], posY, matrix.Color333(0, 0, 0));
+  matrix.drawLine(posX+2, posY+1, b.explosionHits[4], posY+1, matrix.Color333(0, 0, 0));
+  matrix.drawLine(posX+2, posY+2, b.explosionHits[5], posY+2, matrix.Color333(0, 0, 0));
+
+  //Explosion du bas
+  matrix.drawLine(posX, posY, posX, b.explosionHits[6], matrix.Color333(0, 0, 0));
+  matrix.drawLine(posX+1, posY, posX+1, b.explosionHits[7], matrix.Color333(0, 0, 0));
+  matrix.drawLine(posX+2, posY, posX+2, b.explosionHits[8], matrix.Color333(0, 0, 0));
+
+  //Explosion de gauche
+  matrix.drawLine(posX, posY, b.explosionHits[9], posY, matrix.Color333(0, 0, 0));
+  matrix.drawLine(posX, posY+1, b.explosionHits[10], posY+1, matrix.Color333(0, 0, 0));
+  matrix.drawLine(posX, posY+2, b.explosionHits[11], posY+2, matrix.Color333(0, 0, 0));
 }
 
 
@@ -161,17 +241,31 @@ void verifierBombes() {
     for (int i = 0; i < bombeCount; i++) {
         if (bombes[i].active && currentTime - bombes[i].timePosed >= 3000) {
             bombes[i].active = false; // Désactiver la bombe
-            explosion(bombes[i].x, bombes[i].y);
+            explosion(bombes[i]);
+        }
+        if (!bombes[i].active && currentTime - bombes[i].timePosed >= 4000) {
+            cancelExplosion(bombes[i]);
+            //ici supprimer la bombe sinon lag parce que vérification en boucle
         }
     }
 }
 
-
-void explosion(int x, int y) {
-    dessinerExplosion(x, y);
+void deleteBombe(Bombe b) {
+  //Faire une fonction qui décale le tableau de bombe pour écraser les bombes anciennes
 }
 
 
+void explosion(Bombe b) {
+    b = fillExplosionHits(b);
+    dessinerExplosion(b);
+    // retirer la bombe du tableau de bombe
+}
+
+
+void cancelExplosion(Bombe b) {
+    b = fillExplosionHits(b);
+    effacerExplosion(b);
+}
 
 
 void setup() {
