@@ -2,34 +2,30 @@
 #define PLAYER_H
 
 #include <Arduino.h>
-#include <DFRobot_RGBMatrix.h>  // Inclure la librairie de la matrice
+#include "DFRobot_RGBMatrix.h"
 
 class Player {
-private:
-    int x, y;  // Position du joueur
-    int speed; // Vitesse de déplacement
-    DFRobot_RGBMatrix* matrix;
-    short pixelColors[64][64];
-
 public:
-    // Constructeur qui prend un pointeur vers la matrice
-    Player(DFRobot_RGBMatrix* matrix, int startX, int startY, short pixelColors[64][64]);
+    Player(int startX, int startY, int playerSize, int moveSpeed, DFRobot_RGBMatrix& matrix);
 
-    // Getters
-    int getX();
-    int getY();
-
-    // Déplacements
     void moveUp();
     void moveDown();
     void moveLeft();
     void moveRight();
+    void movePlayer(int joystickX, int joystickY);
+    void draw();
+    void clear();
+    
+    int getX() const;
+    int getY() const;
 
-    // Collisions
+private:
+    int posX, posY;
+    int tailleJoueur;
+    int speed;
+    DFRobot_RGBMatrix& matrix;
+
     bool checkWallCollision(int x, int y);
-
-    // Autres actions
-    void placeBomb();
 };
 
 #endif

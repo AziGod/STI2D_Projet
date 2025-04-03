@@ -49,19 +49,22 @@ struct Bombe {
 
 //Tableau des coordonnées des bombes posées
 Bombe bombes[6];
-int bombeCount = 0;
+int bombCount = 0;
 
 // Permet de compter le temps écoulé
 unsigned long lastAddTime = 0; 
 
 //Fonction pour ajouter une bombe au tableau
-void addCoord(int x, int y) {
+void addBomb(int x, int y) {
   unsigned long currentTime = millis();
   
   if (currentTime - lastAddTime >= 200) {
-    if (bombeCount < 6) {
-      bombes[bombeCount] = {x, y, currentTime, true}; // Nouvelle bombe active
-      bombeCount++;
+    if (bombCount < 6) {
+      for(int i = bombCount-1; i >= 0; i--){
+        bombes[i+1] = bombes[i];
+      }
+      bombes[0] = {x, y, currentTime, true}; // Nouvelle bombe active
+      bombCount++;
       lastAddTime = currentTime;
     } else {
       Serial.println("Liste de bombes pleine !");
@@ -185,52 +188,40 @@ void dessinerBombe(int posX, int posY) {
 }
 
 void dessinerExplosion(Bombe b) {
+  
+  uint16_t color;
+
+  if(b.active){
+    color = matrix.Color333(7, 0, 0);
+  }
+  else {
+    color = matrix.Color333(0, 0, 0);
+  }
+
   int posX = b.x;
   int posY = b.y;
   //Explosion du haut
-  matrix.drawLine(posX, posY, posX, b.explosionHits[0], matrix.Color333(7, 0, 0));
-  matrix.drawLine(posX+1, posY, posX+1, b.explosionHits[1], matrix.Color333(7, 0, 0));
-  matrix.drawLine(posX+2, posY, posX+2, b.explosionHits[2], matrix.Color333(7, 0, 0));
+  matrix.drawLine(posX, posY, posX, b.explosionHits[0], color);
+  matrix.drawLine(posX+1, posY, posX+1, b.explosionHits[1], color);
+  matrix.drawLine(posX+2, posY, posX+2, b.explosionHits[2], color);
 
   //Explosion de droite
-  matrix.drawLine(posX+2, posY, b.explosionHits[3], posY, matrix.Color333(7, 0, 0));
-  matrix.drawLine(posX+2, posY+1, b.explosionHits[4], posY+1, matrix.Color333(7, 0, 0));
-  matrix.drawLine(posX+2, posY+2, b.explosionHits[5], posY+2, matrix.Color333(7, 0, 0));
+  matrix.drawLine(posX+2, posY, b.explosionHits[3], posY, color);
+  matrix.drawLine(posX+2, posY+1, b.explosionHits[4], posY+1, color);
+  matrix.drawLine(posX+2, posY+2, b.explosionHits[5], posY+2, color);
 
   //Explosion du bas
-  matrix.drawLine(posX, posY, posX, b.explosionHits[6], matrix.Color333(7, 0, 0));
-  matrix.drawLine(posX+1, posY, posX+1, b.explosionHits[7], matrix.Color333(7, 0, 0));
-  matrix.drawLine(posX+2, posY, posX+2, b.explosionHits[8], matrix.Color333(7, 0, 0));
+  matrix.drawLine(posX, posY, posX, b.explosionHits[6], color);
+  matrix.drawLine(posX+1, posY, posX+1, b.explosionHits[7], color);
+  matrix.drawLine(posX+2, posY, posX+2, b.explosionHits[8], color);
 
   //Explosion de gauche
-  matrix.drawLine(posX, posY, b.explosionHits[9], posY, matrix.Color333(7, 0, 0));
-  matrix.drawLine(posX, posY+1, b.explosionHits[10], posY+1, matrix.Color333(7, 0, 0));
-  matrix.drawLine(posX, posY+2, b.explosionHits[11], posY+2, matrix.Color333(7, 0, 0));
+  matrix.drawLine(posX, posY, b.explosionHits[9], posY, color);
+  matrix.drawLine(posX, posY+1, b.explosionHits[10], posY+1, color);
+  matrix.drawLine(posX, posY+2, b.explosionHits[11], posY+2, color);
 }
 
-void effacerExplosion(Bombe b) {
-  int posX = b.x;
-  int posY = b.y;
-  //Explosion du haut
-  matrix.drawLine(posX, posY, posX, b.explosionHits[0], matrix.Color333(0, 0, 0));
-  matrix.drawLine(posX+1, posY, posX+1, b.explosionHits[1], matrix.Color333(0, 0, 0));
-  matrix.drawLine(posX+2, posY, posX+2, b.explosionHits[2], matrix.Color333(0, 0, 0));
 
-  //Explosion de droite
-  matrix.drawLine(posX+2, posY, b.explosionHits[3], posY, matrix.Color333(0, 0, 0));
-  matrix.drawLine(posX+2, posY+1, b.explosionHits[4], posY+1, matrix.Color333(0, 0, 0));
-  matrix.drawLine(posX+2, posY+2, b.explosionHits[5], posY+2, matrix.Color333(0, 0, 0));
-
-  //Explosion du bas
-  matrix.drawLine(posX, posY, posX, b.explosionHits[6], matrix.Color333(0, 0, 0));
-  matrix.drawLine(posX+1, posY, posX+1, b.explosionHits[7], matrix.Color333(0, 0, 0));
-  matrix.drawLine(posX+2, posY, posX+2, b.explosionHits[8], matrix.Color333(0, 0, 0));
-
-  //Explosion de gauche
-  matrix.drawLine(posX, posY, b.explosionHits[9], posY, matrix.Color333(0, 0, 0));
-  matrix.drawLine(posX, posY+1, b.explosionHits[10], posY+1, matrix.Color333(0, 0, 0));
-  matrix.drawLine(posX, posY+2, b.explosionHits[11], posY+2, matrix.Color333(0, 0, 0));
-}
 
 
 unsigned long bombTimes[6]; // Stocke les temps de pose
@@ -238,35 +229,67 @@ bool bombActive[6]; // Indique si une bombe est active
 
 void verifierBombes() {
     unsigned long currentTime = millis();
-    for (int i = 0; i < bombeCount; i++) {
-        if (bombes[i].active && currentTime - bombes[i].timePosed >= 3000) {
+    for (int i = 0; i < bombCount; i++) {
+        if (bombes[i].active && currentTime - bombes[i].timePosed >= 2600) {
+            handleExplosion(bombes[i]);
             bombes[i].active = false; // Désactiver la bombe
-            explosion(bombes[i]);
         }
-        if (!bombes[i].active && currentTime - bombes[i].timePosed >= 4000) {
-            cancelExplosion(bombes[i]);
-            //ici supprimer la bombe sinon lag parce que vérification en boucle
+        if (!bombes[i].active && currentTime - bombes[i].timePosed >= 3000) {
+            handleExplosion(bombes[i]);
+            deleteBomb(i); //ici supprimer la bombe sinon lag parce que vérification en boucle
+            for(int j = i; j < bombCount; j++){
+              handleExplosion(bombes[j]);
+            }
         }
     }
+    bombCount = countBombNumber();
+
 }
 
-void deleteBombe(Bombe b) {
-  //Faire une fonction qui décale le tableau de bombe pour écraser les bombes anciennes
+void deleteBomb(int i) {
+  bombes[i] = {};
 }
 
 
-void explosion(Bombe b) {
+void handleExplosion(Bombe b) {
     b = fillExplosionHits(b);
     dessinerExplosion(b);
-    // retirer la bombe du tableau de bombe
 }
 
 
-void cancelExplosion(Bombe b) {
-    b = fillExplosionHits(b);
-    effacerExplosion(b);
+
+int countBombNumber(){
+  int bombNumber = 0;
+  while(bombes[bombNumber].timePosed > 0 ){
+    bombNumber ++;
+    if (bombNumber == 6){
+      break;
+    }
+  }
+  return bombNumber;
 }
 
+void movePlayer(){
+  X = analogRead (axeX);
+  Y = analogRead (axeY);
+
+  if(X == 1023){
+    addBomb(posX, posY);
+  }
+
+  if(X < 450 && ! checkWallCollision(posX+1,posY)){
+    moveRight();
+  }
+  if(X > 550 && X < 1023 && ! checkWallCollision(posX-1,posY)){
+    moveLeft();
+  }
+  if(Y > 550 && ! checkWallCollision(posX,posY+1)){
+    moveUp();
+  }
+  if(Y < 450 && ! checkWallCollision(posX,posY-1)){
+    moveDown();
+  }
+}
 
 void setup() {
   pinMode (axeX, INPUT); // définition de A6 comme une entrée
@@ -311,37 +334,20 @@ void setup() {
 
 
 void loop() {
-  const bool tabFinal = caseColors;
-  X = analogRead (axeX);
-  Y = analogRead (axeY);
+  Serial.println(bombCount);
 
-  /*Serial.print("axeX : ");
-  Serial.print("axeY : ");
-    */
-  for(int i=0; i < bombeCount; i++){
+  const bool tabFinal = caseColors;
+
+    
+  for(int i=0; i < bombCount; i++){
       if (bombes[i].active) {
           dessinerBombe(bombes[i].x, bombes[i].y);
       }
   }
   verifierBombes();
+  movePlayer();
 
 
-  if(X == 1023){
-    addCoord(posX, posY);
-  }
-
-  if(X < 450 && ! checkWallCollision(posX+1,posY)){
-    moveRight();
-  }
-  if(X > 550 && X < 1023 && ! checkWallCollision(posX-1,posY)){
-    moveLeft();
-  }
-  if(Y > 550 && ! checkWallCollision(posX,posY+1)){
-    moveUp();
-  }
-  if(Y < 450 && ! checkWallCollision(posX,posY-1)){
-    moveDown();
-  }
   
   delay(40); // Simule le mouvement toutes les secondes
 
