@@ -102,7 +102,7 @@ bool checkWallCollision(int x, int y){
 /*
 * Remplit le tableau explosionHits
 */
-Bombe fillExplosionHits(Bombe b){
+void fillExplosionHits(Bombe &b){
   //haut 
   for(int i = 0; i < 3; i++){
     int coordY = b.y;
@@ -135,7 +135,6 @@ Bombe fillExplosionHits(Bombe b){
     }
     b.explosionHits[i+9] = coordX +1;
   }
-  return b;
 }
 
 /*
@@ -251,8 +250,8 @@ void deleteBomb(int i) {
 }
 
 
-void handleExplosion(Bombe b) {
-    b = fillExplosionHits(b);
+void handleExplosion(Bombe &b) {
+    fillExplosionHits(b);
     dessinerExplosion(b);
 }
 
@@ -346,7 +345,7 @@ void loop() {
   }
   verifierBombes();
   movePlayer();
-
+  checkPlayerGetHit();
 
   
   delay(40); // Simule le mouvement toutes les secondes
@@ -354,4 +353,84 @@ void loop() {
 }
 
 
+/*
+* Fonction qui vérifie si le joueur est bombed
+*/
+void checkPlayerGetHit(){
+
+  // Vérifie si le joueur se trouve sur le même axe qu'une bombe
+  for(int i=0; i<bombCount; i++){
+    unsigned long currentTime = millis();
+
+    if(! bombes[i].active){
+      if(abs(posX - bombes[i].x) < 3){
+        // pour chaque ligne de l'explosion
+        for(int y=0; y<3; y++ ){
+          // pour chaque ligne du joueur
+          for(int k=0; k<3; k++){
+            // si le joueur est touché par une ligne
+            if(bombes[i].x+y == posX+k){
+              // vérifier que l'explosion n'est pas arrêtée pas un obstacle
+              if(bombes[i].explosionHits[y] <= posY && posY <= bombes[i].x+y  || bombes[i].explosionHits[y+6] >= posY && posY >= bombes[i].x+y){
+
+                ecran_de_fin(1,1);
+
+              }
+            }
+          }
+        }
+
+
+       
+        
+      }
+      if(abs(posY - bombes[i].y) < 3){
+         // pour chaque colonne de l'explosion
+        for(int y=0; y<3; y++ ){
+          // pour chaque colonne du joueur
+          for(int k=0; k<3; k++){
+            // si le joueur est touché par une colonne
+            if(bombes[i].y+y == posY+k){
+              // vérifier que l'explosion n'est pas arrêtée pas un obstacle
+              if(bombes[i].explosionHits[y+9] <= posX && posX <= bombes[i].y+y  || bombes[i].explosionHits[y+3] >= posX && posX >= bombes[i].y+y){
+
+                ecran_de_fin(1,1);
+              }
+            }
+          }
+        }
+       
+      }
+    }
+    
+  }
+
+}
+
+void ecran_de_fin(int joueurX, int joueurY) {
+  // Effacer l'écran
+  matrix.fillScreen(matrix.Color333(0, 0, 0));
+  
+  // Définir la couleur du texte (bleu)
+  uint16_t textColor = matrix.Color333(0, 0, 7);
+  
+  // Message à afficher : "Joueur X bombed by Joueur Y"
+  char message[30];
+  sprintf(message, "J%d bombed  By J%d", joueurX, joueurY);
+  
+  // Position initiale pour centrer le texte 
+  int x = 2; // Début à gauche avec une petite marge
+  int y = 20; // Centré verticalement 
+  
+  // Afficher chaque caractère du message
+  for (int i = 0; i < strlen(message); i++) {
+    matrix.drawChar(x, y, message[i], textColor, matrix.Color333(0, 0, 0), 1);
+    x += 6; // Chaque caractère prend environ 6 pixels de large
+    // Si on dépasse la largeur de l'écran, passer à la ligne suivante
+    if (x > 60) {
+      x = 2;
+      y += 12; // Nouvelle ligne (hauteur d'un caractère)
+    }
+  }
+}
 
