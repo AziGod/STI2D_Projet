@@ -27,12 +27,16 @@ int axeX = A6; // signal de l'axe X sur entrée A0
 int axeY = A7; // signal de l'axe Y sur entrée A1
 
 float X, Y;
-int posX = 6, posY = 6;
 int speed = 1;
-
 int tailleJoueur = 3;
 
+/* 
+* Tableau pour stocker la couleur des pixels de la matrix
+* Ici seulement déclaré
+*/
+bool caseColors[13][13];
 
+bool isPlay = true;
 
 DFRobot_RGBMatrix matrix(A, B, C, D, E, CLK, LAT, OE, false, WIDTH, _HIGH);
 
@@ -47,42 +51,56 @@ struct Bombe {
   int explosionHits[12];
 };
 
-//Tableau des coordonnées des bombes posées
-Bombe bombes[6];
-int bombCount = 0;
+struct Coord{
+  int x;
+  int y;
+};
 
-// Permet de compter le temps écoulé
-unsigned long lastAddTime = 0; 
+struct Player {
+  //Cordonnées du joueur
+  Coord c;
+  //Tableau des coordonnées des bombes posées
+  Bombe bombes[6];
+  int bombCount = 0;
+  // Permet de compter le temps écoulé
+  unsigned long lastAddTime = 0; 
+  unsigned long bombTimes[6]; // Stocke les temps de pose
+  bool bombActive[6]; // Indique si une bombe est active
+};
 
-//Fonction pour ajouter une bombe au tableau
-void addBomb(int x, int y) {
-  unsigned long currentTime = millis();
-  
-  if (currentTime - lastAddTime >= 200) {
-    if (bombCount < 6) {
-      for(int i = bombCount-1; i >= 0; i--){
-        bombes[i+1] = bombes[i];
-      }
-      bombes[0] = {x, y, currentTime, true}; // Nouvelle bombe active
-      bombCount++;
-      lastAddTime = currentTime;
-    } else {
-      Serial.println("Liste de bombes pleine !");
-    }
+Player P1;  
+
+
+// FONCTIONS LIEE A UN JOUEUR
+Coord movePlayer(Coord c, float X, float Y){
+
+  int posX = c.x;
+  int posY = c.y;
+
+  if(X < 450 && ! checkWallCollision(posX+1,posY)){
+    c = moveRight(c);
   }
+  if(X > 550 && X < 1023 && ! checkWallCollision(posX-1,posY)){
+    c = moveLeft(c);
+  }
+  if(Y > 550 && ! checkWallCollision(posX,posY+1)){
+    c = moveUp(c);
+  }
+  if(Y < 450 && ! checkWallCollision(posX,posY-1)){
+    c = moveDown(c);
+  }
+
+  return c;
 }
 
-
-
-// tableau pour stocker la couleur des pixels de la matrix
-bool caseColors[13][13];
-
+/*
+* Vérifie la colision entre un joueur et les murs + obstacles
+*/
 bool checkWallCollision(int x, int y){
   if (x < 6 || x > 58 - tailleJoueur || y < 6 || y > 58 - tailleJoueur){
     return true;
   }
  
-  
   for (int i = 0; i < tailleJoueur; i++) { // Première boucle (lignes)
       for (int j = 0; j < tailleJoueur; j++) { // Deuxième boucle (colonnes)
           int caseX = ((x-6)+i)/4 ;
@@ -99,10 +117,105 @@ bool checkWallCollision(int x, int y){
   return false;
 }
 
+
+Coord moveRight(Coord c) { 
+  effacerJoueur(c.x, c.y);
+  c.x = min(60, c.x + speed);
+  dessinerJoueur(c.x, c.y);
+  return c;
+}
+Coord moveLeft(Coord c) { 
+  effacerJoueur(c.x, c.y);
+  c.x = max(0, c.x - speed);
+  dessinerJoueur(c.x, c.y);
+  return c;
+}
+Coord moveUp(Coord c) { 
+  effacerJoueur(c.x, c.y);  
+  c.y = min(60, c.y + speed);
+  dessinerJoueur(c.x, c.y);
+}
+Coord moveDown(Coord c) { 
+  effacerJoueur(c.x, c.y);
+  c.y = max(0, c.y - speed);
+  dessinerJoueur(c.x, c.y);
+}
+
+void effacerJoueur(int posX, int posY){
+    matrix.fillRect(posX, posY, tailleJoueur, tailleJoueur, matrix.Color333(0, 0, 0));
+}
+
+void dessinerJoueur(int posX, int posY){
+    matrix.fillRect(posX, posY, tailleJoueur, tailleJoueur, matrix.Color333(0, 0, 7));
+}
+
+// FONCTIONS LIEE A UNE BOMBE
+
+//Fonction pour ajouter une bombe au tableau
+Player addBomb(Player p) {
+  unsigned long currentTime = millis();
+  int x = p.c.x;
+  int y = p.c.y;
+
+  if (currentTime - p.lastAddTime >= 200) {
+    if (p.bombCount < 6) {
+      for(int i = p.bombCount-1; i >= 0; i--){
+        p.bombes[i+1] = p.bombes[i];
+      }
+      p.bombes[0] = {x, y, currentTime, true}; // Nouvelle bombe active
+      p.bombCount++;
+      p.lastAddTime = currentTime;
+    } else {
+      Serial.println("Liste de bombes pleine !");
+    }
+  }
+  return p;
+}
+
+void dessinerBombes(int bombCount, Bombe bombes[6]){
+  for(int i=0; i < bombCount; i++){
+      if (bombes[i].active) {
+          dessinerBombe(bombes[i].x, bombes[i].y);
+      }
+  }
+}
+
+void dessinerBombe(int posX, int posY) {
+  	matrix.drawLine(posX+1, posY, posX+1, posY+2, matrix.Color333(7, 0, 0));
+    matrix.drawLine(posX, posY+1, posX+2, posY+1, matrix.Color333(7, 0, 0));
+}
+
+void verifierBombes(Player &P) {
+  unsigned long currentTime = millis();
+
+  for (int i = 0; i < P.bombCount; i++) {
+    if (P.bombes[i].active && currentTime - P.bombes[i].timePosed >= 2600) {
+        P.bombes[i] = handleExplosion(P.bombes[i]);
+        P.bombes[i].active = false; // Désactiver la bombe
+    }
+    if (!P.bombes[i].active && currentTime - P.bombes[i].timePosed >= 3000) {
+        P.bombes[i] = handleExplosion(P.bombes[i]);
+        P.bombes[i] = {}; //ici supprimer la bombe sinon lag parce que vérification en boucle
+        for(int j = i; j < P.bombCount; j++){ // redessine les bombes en train d'exploser après avoir effacé celle qui a finit
+          P.bombes[i] = handleExplosion(P.bombes[j]);
+        }
+    }
+  }
+  P.bombCount = countBombNumber(P.bombes);
+  
+}
+
+Bombe handleExplosion(Bombe b) {
+  b = fillExplosionHits(b);
+  dessinerExplosion(b);
+
+  return b;
+}
+
 /*
 * Remplit le tableau explosionHits
 */
-void fillExplosionHits(Bombe &b){
+Bombe fillExplosionHits(Bombe b){
   //haut 
   for(int i = 0; i < 3; i++){
     int coordY = b.y;
@@ -135,6 +248,8 @@ void fillExplosionHits(Bombe &b){
     }
     b.explosionHits[i+9] = coordX +1;
   }
+
+  return b;
 }
 
 /*
@@ -149,43 +264,9 @@ bool checkBlockGetExplosion(int x, int y){
     return false;
 }
 
-void moveUp() { 
-  effacerJoueur(posX, posY);  
-  posY = min(60, posY + speed);
-  dessinerJoueur(posX, posY);
-}
-
-void moveDown() { 
-  effacerJoueur(posX, posY);
-  posY = max(0, posY - speed);
-  dessinerJoueur(posX, posY);
-}
-
-void moveLeft() { 
-  effacerJoueur(posX, posY);
-  posX = max(0, posX - speed);
-  dessinerJoueur(posX, posY);
-}
-
-void moveRight() { 
-  effacerJoueur(posX, posY);
-  posX = min(60, posX + speed);
-  dessinerJoueur(posX, posY);
-}
-
-void effacerJoueur(int posX, int posY){
-    matrix.fillRect(posX, posY, tailleJoueur, tailleJoueur, matrix.Color333(0, 0, 0));
-}
-
-void dessinerJoueur(int posX, int posY){
-    matrix.fillRect(posX, posY, tailleJoueur, tailleJoueur, matrix.Color333(0, 0, 7));
-}
-
-void dessinerBombe(int posX, int posY) {
-  	matrix.drawLine(posX+1, posY, posX+1, posY+2, matrix.Color333(7, 0, 0));
-    matrix.drawLine(posX, posY+1, posX+2, posY+1, matrix.Color333(7, 0, 0));
-}
-
+/*
+* Dessine l'explosion sur la matrice
+*/
 void dessinerExplosion(Bombe b) {
   
   uint16_t color;
@@ -222,42 +303,10 @@ void dessinerExplosion(Bombe b) {
 
 
 
-
-unsigned long bombTimes[6]; // Stocke les temps de pose
-bool bombActive[6]; // Indique si une bombe est active
-
-void verifierBombes() {
-    unsigned long currentTime = millis();
-    for (int i = 0; i < bombCount; i++) {
-        if (bombes[i].active && currentTime - bombes[i].timePosed >= 2600) {
-            handleExplosion(bombes[i]);
-            bombes[i].active = false; // Désactiver la bombe
-        }
-        if (!bombes[i].active && currentTime - bombes[i].timePosed >= 3000) {
-            handleExplosion(bombes[i]);
-            deleteBomb(i); //ici supprimer la bombe sinon lag parce que vérification en boucle
-            for(int j = i; j < bombCount; j++){
-              handleExplosion(bombes[j]);
-            }
-        }
-    }
-    bombCount = countBombNumber();
-
-}
-
-void deleteBomb(int i) {
-  bombes[i] = {};
-}
-
-
-void handleExplosion(Bombe &b) {
-    fillExplosionHits(b);
-    dessinerExplosion(b);
-}
-
-
-
-int countBombNumber(){
+/*
+* Met à jour le nombre de bombe d'un joueur
+*/
+int countBombNumber(Bombe bombes[6]){
   int bombNumber = 0;
   while(bombes[bombNumber].timePosed > 0 ){
     bombNumber ++;
@@ -268,31 +317,16 @@ int countBombNumber(){
   return bombNumber;
 }
 
-void movePlayer(){
-  X = analogRead (axeX);
-  Y = analogRead (axeY);
 
-  if(X == 1023){
-    addBomb(posX, posY);
-  }
 
-  if(X < 450 && ! checkWallCollision(posX+1,posY)){
-    moveRight();
-  }
-  if(X > 550 && X < 1023 && ! checkWallCollision(posX-1,posY)){
-    moveLeft();
-  }
-  if(Y > 550 && ! checkWallCollision(posX,posY+1)){
-    moveUp();
-  }
-  if(Y < 450 && ! checkWallCollision(posX,posY-1)){
-    moveDown();
-  }
-}
+
+// PROGRAMME PRINCIPAL 
 
 void setup() {
   pinMode (axeX, INPUT); // définition de A6 comme une entrée
   pinMode (axeY, INPUT); // définition de A7 comme une entrée
+  P1.c.x = 6;
+  P1.c.y = 6;
   Serial.begin (9600);
 
   matrix.begin();
@@ -326,26 +360,26 @@ void setup() {
   }
 
   //dessine le joueur
-  dessinerJoueur(posX, posY);
+  dessinerJoueur(P1.c.x, P1.c.y);
 
  }
 
 
 
 void loop() {
-  Serial.println(bombCount);
 
-  const bool tabFinal = caseColors;
-
-    
-  for(int i=0; i < bombCount; i++){
-      if (bombes[i].active) {
-          dessinerBombe(bombes[i].x, bombes[i].y);
-      }
+  //const bool tabFinal = caseColors;
+  X = analogRead (axeX);
+  Y = analogRead (axeY);
+  if(isPlay){
+    dessinerBombes(P1.bombCount, P1.bombes);
+    verifierBombes(P1);
+    isPlay = !checkPlayerGetHit(P1);
+    if(X == 1023){
+      P1 = addBomb(P1);
+    }
+    P1.c = movePlayer(P1.c, X, Y);
   }
-  verifierBombes();
-  movePlayer();
-  checkPlayerGetHit();
 
   
   delay(40); // Simule le mouvement toutes les secondes
@@ -356,57 +390,58 @@ void loop() {
 /*
 * Fonction qui vérifie si le joueur est bombed
 */
-void checkPlayerGetHit(){
-
+bool checkPlayerGetHit(Player p){
+  int posX = p.c.x;
+  int posY = p.c.y;
   // Vérifie si le joueur se trouve sur le même axe qu'une bombe
-  for(int i=0; i<bombCount; i++){
+  for(int i=0; i<p.bombCount; i++){
     unsigned long currentTime = millis();
-
-    if(! bombes[i].active){
-      if(abs(posX - bombes[i].x) < 3){
+    if(! p.bombes[i].active){
+      // axe X
+      if(abs(posX - p.bombes[i].x) < 3){
         // pour chaque ligne de l'explosion
         for(int y=0; y<3; y++ ){
           // pour chaque ligne du joueur
           for(int k=0; k<3; k++){
             // si le joueur est touché par une ligne
-            if(bombes[i].x+y == posX+k){
+            if(p.bombes[i].x+y == posX+k){
               // vérifier que l'explosion n'est pas arrêtée pas un obstacle
-              if(bombes[i].explosionHits[y] <= posY && posY <= bombes[i].x+y  || bombes[i].explosionHits[y+6] >= posY && posY >= bombes[i].x+y){
-
+              if(p.bombes[i].explosionHits[y] <= posY && posY <= p.bombes[i].x+y  || p.bombes[i].explosionHits[y+6] >= posY && posY >= p.bombes[i].x+y){
+                
                 ecran_de_fin(1,1);
-
+                return true;
               }
             }
           }
         }
-
-
-       
-        
       }
-      if(abs(posY - bombes[i].y) < 3){
+      // axe Y
+      if(abs(posY - p.bombes[i].y) < 3){
          // pour chaque colonne de l'explosion
         for(int y=0; y<3; y++ ){
           // pour chaque colonne du joueur
           for(int k=0; k<3; k++){
             // si le joueur est touché par une colonne
-            if(bombes[i].y+y == posY+k){
+            if(p.bombes[i].y+y == posY+k){
               // vérifier que l'explosion n'est pas arrêtée pas un obstacle
-              if(bombes[i].explosionHits[y+9] <= posX && posX <= bombes[i].y+y  || bombes[i].explosionHits[y+3] >= posX && posX >= bombes[i].y+y){
+              if(p.bombes[i].explosionHits[y+9] <= posX && posX <= p.bombes[i].y+y  || p.bombes[i].explosionHits[y+3] >= posX && posX >= p.bombes[i].y+y){
 
                 ecran_de_fin(1,1);
+                return true;
               }
             }
           }
         }
        
       }
-    }
-    
+    } 
   }
-
+  return false;
 }
 
+/*
+* Affiche l'écran de fin de jeu
+*/
 void ecran_de_fin(int joueurX, int joueurY) {
   // Effacer l'écran
   matrix.fillScreen(matrix.Color333(0, 0, 0));
