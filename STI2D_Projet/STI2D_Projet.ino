@@ -11,7 +11,7 @@
  
 #include <DFRobot_RGBMatrix.h> // Hardware-specific library
 #include <VirtualWire.h>
-#include <TimerThree.h>
+#include <TimerFive.h>
 
 
 #define OE   	9
@@ -31,13 +31,14 @@ int RF_TX_PIN = 7;
 int RF_PTT_PIN = 30;
 
 float X, Y;
+int X2 = 512;
+int Y2 = 512;
 int speed = 1;
 int tailleJoueur = 3;
   // JOYSTICK
 int axeX = A6; // signal de l'axe X sur entrée A0
 int axeY = A7; // signal de l'axe Y sur entrée A1
-int axeX2 = A12; // signal de l'axe X sur entrée A1
-int axeY2 = A13; // signal de l'axe Y sur entrée A1
+
 
 // Variables pour contrôler la fréquence de mise à jour
 unsigned long lastUpdate = 0;
@@ -350,15 +351,16 @@ void setup() {
   P2.color[1] = 7;
 
   
-  // matrix
-  matrix.begin();
   // Récepteur
   Serial.begin(9600);
   vw_set_rx_pin(RF_RX_PIN);  // initialisation de la broche de reception
   vw_set_tx_pin(RF_TX_PIN);  
   vw_set_ptt_pin(RF_PTT_PIN);  
-  vw_setup(500); // choix de la vitesse de transmission
+  vw_setup(2200); // choix de la vitesse de transmission
   vw_rx_start(); //démarrage du récepteur
+
+  // matrix
+  matrix.begin();
   
   
   // dessine le mur 
@@ -403,9 +405,12 @@ void loop() {
   uint8_t buflen = VW_MAX_MESSAGE_LEN;
   if (vw_get_message(buf, &buflen)) // non-blocking I/O
   {
+    buf[buflen] = '\0';
     // si on a reçu un message
     Serial.print("Reçu : ");
-    Serial.println((char*) buf);
+    String message = (char*) buf;
+    Serial.println(message);
+    sscanf((char*)buf, "%d;%d", &X2, &Y2);
   }
   // Gestion du jeu
   unsigned long currentTime = millis();
@@ -424,15 +429,12 @@ void loop() {
     dessinerJoueur(P1.c.x, P1.c.y, P1.color);
     
     // joueur 2
-    X = analogRead(axeX2);
-    Y = analogRead(axeY2);
-
     dessinerBombes(P2.bombCount, P2.bombes);
     verifierBombes(P2);
-    if(X == 1023){
+    if(X2 == 1023){
       P2 = addBomb(P2);
     }
-    P2.c = movePlayer(P2.c, X, Y);
+    P2.c = movePlayer(P2.c, X2, Y2);
     dessinerJoueur(P2.c.x, P2.c.y, P2.color);
 
     isPlay = !(checkPlayerGetHit(P1, P2) || checkPlayerGetHit(P2, P1) || checkPlayerGetHit(P1, P1) || checkPlayerGetHit(P2, P2));
