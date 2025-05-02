@@ -10,6 +10,9 @@
  */
  
 #include <DFRobot_RGBMatrix.h> // Hardware-specific library
+#include <VirtualWire.h>
+#include <TimerThree.h>
+
 
 #define OE   	9
 #define LAT 	10
@@ -23,6 +26,9 @@
 #define _HIGH	64
 
 
+int RF_RX_PIN = 8;
+int RF_TX_PIN = 7;
+int RF_PTT_PIN = 30;
 
 float X, Y;
 int speed = 1;
@@ -32,6 +38,10 @@ int axeX = A6; // signal de l'axe X sur entrée A0
 int axeY = A7; // signal de l'axe Y sur entrée A1
 int axeX2 = A12; // signal de l'axe X sur entrée A1
 int axeY2 = A13; // signal de l'axe Y sur entrée A1
+
+// Variables pour contrôler la fréquence de mise à jour
+unsigned long lastUpdate = 0;
+const unsigned long updateInterval = 40; // 60 FPS (~16ms)
 
 /* 
 * Tableau pour stocker la couleur des pixels de la matrix
@@ -79,22 +89,22 @@ Player P2;
 
 
 // FONCTIONS LIEE A UN JOUEUR
-Coord movePlayer(Coord c, float X, float Y, int color[]){
+Coord movePlayer(Coord c, float X, float Y){
 
   int posX = c.x;
   int posY = c.y;
 
   if(X < 450 && ! checkWallCollision(posX+1,posY)){
-    c = moveUp(c, color);
+    c = moveUp(c);
   }
   if(X > 550 && X < 1023 && ! checkWallCollision(posX-1,posY)){
-    c = moveDown(c, color);
+    c = moveDown(c);
   }
   if(Y > 550 && ! checkWallCollision(posX,posY+1)){
-    c = moveRight(c, color);
+    c = moveRight(c);
   }
   if(Y < 450 && ! checkWallCollision(posX,posY-1)){
-    c = moveLeft(c, color);
+    c = moveLeft(c);
   }
 
   return c;
@@ -124,36 +134,30 @@ bool checkWallCollision(int x, int y){
   return false;
 }
 
-
-Coord moveUp(Coord c, int color[]) { 
+Coord moveUp(Coord c) { 
   effacerJoueur(c.x, c.y);
   c.x = min(60, c.x + speed);
-  dessinerJoueur(c.x, c.y, color);
   return c;
 }
-Coord moveDown(Coord c, int color[]) { 
+Coord moveDown(Coord c) { 
   effacerJoueur(c.x, c.y);
   c.x = max(0, c.x - speed);
-  dessinerJoueur(c.x, c.y, color);
   return c;
 }
-Coord moveRight(Coord c, int color[]) { 
-  effacerJoueur(c.x, c.y);  
+Coord moveRight(Coord c) { 
+  effacerJoueur(c.x, c.y);
   c.y = min(60, c.y + speed);
-  dessinerJoueur(c.x, c.y, color);
   return c;
 }
-Coord moveLeft(Coord c, int color[]) { 
+Coord moveLeft(Coord c) { 
   effacerJoueur(c.x, c.y);
   c.y = max(0, c.y - speed);
-  dessinerJoueur(c.x, c.y, color);
   return c;
 }
 
 void effacerJoueur(int posX, int posY){
     matrix.fillRect(posX, posY, tailleJoueur, tailleJoueur, matrix.Color333(0, 0, 0));
 }
-
 void dessinerJoueur(int posX, int posY, int color[]){
     matrix.fillRect(posX, posY, tailleJoueur, tailleJoueur, matrix.Color333(color[0], color[1], color[2]));
 }
@@ -331,6 +335,7 @@ int countBombNumber(Bombe bombes[6]){
 // PROGRAMME PRINCIPAL 
 
 void setup() {
+
   P1.num = 1;
   P2.num = 2;
 
@@ -339,15 +344,22 @@ void setup() {
   P1.c.y = 6;
   P2.c.x = 55;
   P2.c.y = 55;
-
+  
   //Couleur des joueurs 
   P1.color[2] = 7;
   P2.color[1] = 7;
 
-
-  Serial.begin(9600);
-
+  
+  // matrix
   matrix.begin();
+  // Récepteur
+  Serial.begin(9600);
+  vw_set_rx_pin(RF_RX_PIN);  // initialisation de la broche de reception
+  vw_set_tx_pin(RF_TX_PIN);  
+  vw_set_ptt_pin(RF_PTT_PIN);  
+  vw_setup(500); // choix de la vitesse de transmission
+  vw_rx_start(); //démarrage du récepteur
+  
   
   // dessine le mur 
   for (int i = 0; i <= 63; i++) {
@@ -357,7 +369,6 @@ void setup() {
       }
     }
   }
-
   // dessiner les obstacles
   for (int k = 0; k <= 5; k++) {
     for (int j = 0; j <= 5; j++) {
@@ -386,7 +397,20 @@ void setup() {
 
 
 void loop() {
-  if(isPlay){
+
+  // Gestion du récepteur
+  uint8_t buf[VW_MAX_MESSAGE_LEN];
+  uint8_t buflen = VW_MAX_MESSAGE_LEN;
+  if (vw_get_message(buf, &buflen)) // non-blocking I/O
+  {
+    // si on a reçu un message
+    Serial.print("Reçu : ");
+    Serial.println((char*) buf);
+  }
+  // Gestion du jeu
+  unsigned long currentTime = millis();
+  if (currentTime - lastUpdate >= updateInterval && isPlay) {
+    
     // joueur 1
     X = analogRead(axeX);
     Y = analogRead(axeY);
@@ -396,7 +420,8 @@ void loop() {
     if(X == 1023){
       P1 = addBomb(P1);
     }
-    P1.c = movePlayer(P1.c, X, Y, P1.color);
+    P1.c = movePlayer(P1.c, X, Y);
+    dessinerJoueur(P1.c.x, P1.c.y, P1.color);
     
     // joueur 2
     X = analogRead(axeX2);
@@ -407,42 +432,39 @@ void loop() {
     if(X == 1023){
       P2 = addBomb(P2);
     }
-    P2.c = movePlayer(P2.c, X, Y, P2.color);
-    isPlay = !(checkPlayerGetHit(P1) || checkPlayerGetHit(P2));
-  }
-  else {
-    effacerJoueur(P1.c.x, P1.c.y);
-    effacerJoueur(P2.c.x, P2.c.y);
-  }
-    
-  
-  delay(40); // Simule le mouvement toutes les secondes
+    P2.c = movePlayer(P2.c, X, Y);
+    dessinerJoueur(P2.c.x, P2.c.y, P2.color);
 
+    isPlay = !(checkPlayerGetHit(P1, P2) || checkPlayerGetHit(P2, P1) || checkPlayerGetHit(P1, P1) || checkPlayerGetHit(P2, P2));
+    lastUpdate = currentTime;
+  }
+  
+ 
 }
 
 
 /*
 * Fonction qui vérifie si le joueur est bombed
 */
-bool checkPlayerGetHit(Player p){
-  int posX = p.c.x;
-  int posY = p.c.y;
+bool checkPlayerGetHit(Player p1, Player p2){
+  int posX = p1.c.x;
+  int posY = p1.c.y;
   // Vérifie si le joueur se trouve sur le même axe qu'une bombe
-  for(int i=0; i<p.bombCount; i++){
+  for(int i=0; i<p2.bombCount; i++){
     unsigned long currentTime = millis();
-    if(! p.bombes[i].active){
+    if(! p2.bombes[i].active){
       // axe X
-      if(abs(posX - p.bombes[i].x) < 3){
+      if(abs(posX - p2.bombes[i].x) < 3){
         // pour chaque ligne de l'explosion
         for(int y=0; y<3; y++ ){
           // pour chaque ligne du joueur
           for(int k=0; k<3; k++){
             // si le joueur est touché par une ligne
-            if(p.bombes[i].x+y == posX+k){
+            if(p2.bombes[i].x+y == posX+k){
               // vérifier que l'explosion n'est pas arrêtée pas un obstacle
-              if(p.bombes[i].explosionHits[y] <= posY && posY <= p.bombes[i].x+y  || p.bombes[i].explosionHits[y+6] >= posY && posY >= p.bombes[i].x+y){
+              if(p2.bombes[i].explosionHits[y] <= posY && posY <= p2.bombes[i].x+y  || p2.bombes[i].explosionHits[y+6] >= posY && posY >= p2.bombes[i].x+y){
                 
-                ecran_de_fin(p.num);
+                ecran_de_fin(p1.num, p2.num);
                 return true;
               }
             }
@@ -450,19 +472,19 @@ bool checkPlayerGetHit(Player p){
         }
       }
       // axe Y
-      if(abs(posY - p.bombes[i].y) < 3){
+      if(abs(posY - p2.bombes[i].y) < 3){
          // pour chaque colonne de l'explosion
         for(int y=0; y<3; y++ ){
           // pour chaque colonne du joueur
           for(int k=0; k<3; k++){
             // si le joueur est touché par une colonne
-            if(p.bombes[i].y+y == posY+k){
+            if(p2.bombes[i].y+y == posY+k){
               // vérifier que l'explosion n'est pas arrêtée pas un obstacle
-              if(p.bombes[i].explosionHits[y+9] <= posX && posX <= p.bombes[i].y+y  || p.bombes[i].explosionHits[y+3] >= posX && posX >= p.bombes[i].y+y){
+              if(p2.bombes[i].explosionHits[y+9] <= posX && posX <= p2.bombes[i].y+y  || p2.bombes[i].explosionHits[y+3] >= posX && posX >= p2.bombes[i].y+y){
 
-                ecran_de_fin(p.num);
+                ecran_de_fin(p1.num, p2.num);
                 return true;
-              }
+              } 
             }
           }
         }
@@ -476,7 +498,7 @@ bool checkPlayerGetHit(Player p){
 /*
 * Affiche l'écran de fin de jeu
 */
-void ecran_de_fin(int joueurX) {
+void ecran_de_fin(int joueurX, int joueurY) {
   // Effacer l'écran
   matrix.fillScreen(matrix.Color333(0, 0, 0));
   
@@ -485,7 +507,7 @@ void ecran_de_fin(int joueurX) {
   
   // Message à afficher : "Joueur X bombed by Joueur Y"
   char message[30];
-  sprintf(message, "J%d bombed", joueurX);
+  sprintf(message, "J%d bombed by J%d", joueurX, joueurY);
   
   // Position initiale pour centrer le texte 
   int x = 5; // Début à gauche avec une petite marge
